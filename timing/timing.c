@@ -58,16 +58,38 @@
 #include <sys/timeb.h>
 #endif
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#ifdef _POSIX_TIMERS
+#include <time.h>
+#endif
+#endif
+#include "stdio.h"
+#include "errno.h"
+
 #include "timing.h"
 
 /* see timing.h for an explanation of _mangle() */
 
-/* 
- * Returns milliseconds no matter what. 
+/*
+ * Returns milliseconds no matter what.
  */
 uint64_t timing_get_time(void)
 {
-#ifdef HAVE_GETTIMEOFDAY
+#if defined(_POSIX_TIMERS) && defined(_POSIX_MONOTONIC_CLOCK)
+    struct timespec now;
+    const clockid_t clk_id =
+#if defined(CLOCK_MONOTONIC_COARSE) && CLOCK_MONOTONIC_COARSE >= 0
+        CLOCK_MONOTONIC_COARSE; /* ms precision */
+#else
+        CLOCK_MONOTONIC;
+#endif
+        if (0 != clock_gettime(clk_id, &now)) {
+            fprintf(stderr, "timing_get_time failed (%i)\n", errno);
+            return 0;
+        }
+        return (long)now.tv_sec * (uint64_t)1000 + now.tv_nsec / 1000000L;
+#elif HAVE_GETTIMEOFDAY
     struct timeval mtv;
 
     gettimeofday(&mtv, NULL);
